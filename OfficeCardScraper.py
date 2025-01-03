@@ -144,7 +144,7 @@ class OfficeCardScraper:
             else:
                 description_text = desc_tag[0].text.strip() if desc_tag else None
             return description_text
-        return None
+        return "No Description Provided"
 
     def extract_ads(self, card):
         ad_tag = card.find('div', class_='text-base text-primary-dark font-bold')
