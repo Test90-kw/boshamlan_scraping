@@ -38,8 +38,8 @@ jobs:
             echo 'echo "Running deployment with provided secret..."' >> deploy.sh
             chmod +x deploy.sh
           fi
-      - name: Deploy Application
-        run: ./deploy.sh ${{ secrets.BOSHAMLAN_GCLOUD_KEY_JSON }}
+      # - name: Deploy Application
+      #   run: ./deploy.sh ${{ secrets.BOSHAMLAN_GCLOUD_KEY_JSON }}
       - name: Run the scraper
         env:
           BOSHAMLAN_GCLOUD_KEY_JSON: ${{ secrets.BOSHAMLAN_GCLOUD_KEY_JSON }}
