@@ -6,19 +6,19 @@ import json
 
 class MainScraper:
     def __init__(self):
-        # self.property_urls = {
-        #     "https://www.boshamlan.com/للايجار": "عقار للايجار",
-        #     "https://www.boshamlan.com/للبيع": "عقار للبيع",
-        #     "https://www.boshamlan.com/للبدل": "عقار للبدل"
-        # }
+        self.property_urls = {
+            "https://www.boshamlan.com/للايجار": "عقار للايجار",
+            "https://www.boshamlan.com/للبيع": "عقار للبيع",
+            "https://www.boshamlan.com/للبدل": "عقار للبدل"
+        }
         self.office_url = "https://www.boshamlan.com/المكاتب"
 
     async def run(self):
         # Scrape property listings for each URL in the property_urls dictionary
-        # for url, file_name in self.property_urls.items():
-        #     scraper = PropertyCardScraper(url)
-        #     result = await scraper.scrape_cards()
-        #     self.save_to_excel(result, file_name)
+        for url, file_name in self.property_urls.items():
+            scraper = PropertyCardScraper(url)
+            result = await scraper.scrape_cards()
+            self.save_to_excel(result, file_name)
 
         # Scrape office listings
         scraper = OfficeCardScraper(self.office_url)
