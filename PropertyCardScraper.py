@@ -1,6 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright
 import json
+from datetime import datetime, timedelta
 
 
 class PropertyCardScraper:
@@ -185,14 +186,75 @@ class PropertyCardScraper:
         return None
 
     async def scroll_to_bottom(self, page):
-        previous_height = await page.evaluate('document.body.scrollHeight')
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        button_selector = (
+            'button.text-base.shrink-0.select-none.whitespace-nowrap.transition-colors.'
+            'disabled\\:opacity-50.h-12.font-bold.bg-primary.text-on-primary.active\\:bg-active-primary.'
+            'w-full.cursor-pointer.z-20.max-w-2xl.py-3.md\\:py-4.px-8.rounded-full.flex.items-center.justify-center.gap-2\\.5'
+        )
+
+        # 1. Press the button ONCE if found
+        try:
+            button = await page.query_selector(button_selector)
+            if button:
+                is_disabled = await button.get_property('disabled')
+                if not is_disabled:
+                    await button.click()
+                    await asyncio.sleep(10)  # Wait for items to load after clicking
+        except Exception as e:
+            print(f"Could not click 'Show More' button: {e}")
+
+        # 2. Begin scrolling and checking card dates
+        consecutive_old = 0
         while True:
             await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            await asyncio.sleep(2)
-            new_height = await page.evaluate('document.body.scrollHeight')
-            if new_height == previous_height:
+            await asyncio.sleep(2)  # Allow cards to load
+
+            # 3. Get all relative date elements
+            date_elements = await page.query_selector_all('.rounded.text-xs.flex.items-center.gap-1')
+            date_texts = []
+            for elem in date_elements:
+                txt = await elem.text_content()
+                if txt:
+                    date_texts.append(txt.strip())
+
+            # 4. Check for 3 consecutive cards with date older than yesterday
+            consecutive_old = 0
+            for date_str in date_texts:
+                # If your cards have actual date format, use this:
+                try:
+                    card_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    if card_date < datetime.strptime(yesterday, "%Y-%m-%d"):
+                        consecutive_old += 1
+                        if consecutive_old >= 3:
+                            print("3 consecutive old cards found. Stopping scroll.")
+                            return
+                    else:
+                        consecutive_old = 0
+                except ValueError:
+                    # If not a date string, fallback to your previous logic (e.g. "ساعة" or "دقيقة")
+                    if any(word in date_str for word in ['ساعة', 'دقيقة']):
+                        consecutive_old = 0  # Reset, it's a fresh card
+                    else:
+                        consecutive_old += 1
+                        if consecutive_old >= 3:
+                            print("3 consecutive old cards found. Stopping scroll.")
+                            return
+
+            # If not enough cards found to check, break to avoid infinite loop
+            if len(date_texts) < 3:
+                print("Not enough cards to check for consecutive old dates.")
                 break
-            previous_height = new_height
+
+    # async def scroll_to_bottom(self, page):
+    #     previous_height = await page.evaluate('document.body.scrollHeight')
+    #     while True:
+    #         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+    #         await asyncio.sleep(2)
+    #         new_height = await page.evaluate('document.body.scrollHeight')
+    #         if new_height == previous_height:
+    #             break
+    #         previous_height = new_height
 
 
 # # Usage
