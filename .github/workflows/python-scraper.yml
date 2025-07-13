@@ -29,7 +29,7 @@ jobs:
       - name: Verify Files and Secrets
         run: |
           ls -la
-          echo "BOSHAMLAN_GCLOUD_KEY_JSON is ${{ secrets.BOSHAMLAN_GCLOUD_KEY_JSON }}"
+          echo "BOSHAMLAN_GCLOUD_KEY_JSON is ${{ secrets.GCLOUD_KEY_JSON }}"
       - name: Create Deploy Script (if missing)
         run: |
           if [ ! -f ./deploy.sh ]; then
@@ -42,7 +42,7 @@ jobs:
       #   run: ./deploy.sh ${{ secrets.BOSHAMLAN_GCLOUD_KEY_JSON }}
       - name: Run the scraper
         env:
-          BOSHAMLAN_GCLOUD_KEY_JSON: ${{ secrets.BOSHAMLAN_GCLOUD_KEY_JSON }}
+          BOSHAMLAN_GCLOUD_KEY_JSON: ${{ secrets.GCLOUD_KEY_JSON }}
         run: |
           python main.py
       - name: Cleanup
