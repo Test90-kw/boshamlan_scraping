@@ -161,9 +161,3 @@ class OfficeCardScraper:
             mobile_number = match.group(1)  # The last part of the URL
             return f"+965{mobile_number}"
         return None
-
-
-# # Usage
-# scraper = CardScraper("https://www.boshamlan.com/المكاتب")
-# result = asyncio.run(scraper.scrape_cards())
-# print(result)
