@@ -245,26 +245,3 @@ class PropertyCardScraper:
             if len(date_texts) < 3:
                 print("Not enough cards to check for consecutive old dates.")
                 break
-
-    # async def scroll_to_bottom(self, page):
-    #     previous_height = await page.evaluate('document.body.scrollHeight')
-    #     while True:
-    #         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-    #         await asyncio.sleep(2)
-    #         new_height = await page.evaluate('document.body.scrollHeight')
-    #         if new_height == previous_height:
-    #             break
-    #         previous_height = new_height
-
-
-# # Usage
-# async def main():
-#     url = "https://www.boshamlan.com/للبيع"
-#     scraper = CardScraper(url)
-#     result = await scraper.scrape_cards()
-#     print(result)
-#
-#
-# if __name__ == "__main__":
-#     asyncio.run(main())
-
