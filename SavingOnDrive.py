@@ -36,8 +36,8 @@ class SavingOnDrive:
 
     def save_files(self, files):
         parent_folder_ids = [
-            '1ayaYWPFnswsOP2nRiDtiwGuy_r43Dr3F',  # Existing "Property Scraper Uploads"
-            '1FkFWACOrKJRzPl2v6OST_I8XDIzbwZ1x'   # New parent folder
+            '1sOGg6eHe53eLmhGwnuX-YNum5ooNsx_F',  # Existing "Property Scraper Uploads"
+            '112UxR4Lh5AhY8LwXVLFgGH3YN0YATMG5'   # New parent folder
         ]
     
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -48,12 +48,3 @@ class SavingOnDrive:
                 self.upload_file(file_name, folder_id)
             print(f"Files uploaded successfully to folder '{yesterday}' in parent folder ID '{parent_folder_id}' on Google Drive.")
 
-    # def save_files(self, files):
-    #     parent_folder_id = '1ayaYWPFnswsOP2nRiDtiwGuy_r43Dr3F'  # ID of "Property Scraper Uploads"
-
-    #     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    #     folder_id = self.create_folder(yesterday, parent_folder_id)
-
-    #     for file_name in files:
-    #         self.upload_file(file_name, folder_id)
-    #     print(f"Files uploaded successfully to folder '{yesterday}' on Google Drive.")
