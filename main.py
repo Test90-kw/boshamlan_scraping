@@ -1,41 +1,62 @@
 import asyncio
-import os
 import json
-import pandas as pd
+import os
 from datetime import datetime, timedelta
-from PropertyCardScraper import PropertyCardScraper
+import pandas as pd
 from OfficeCardScraper import OfficeCardScraper
+from PropertyCardScraper import PropertyCardScraper
 from SavingOnDrive import SavingOnDrive
 
-class MainScraper:
-    def __init__(self):
-        self.property_urls = {
-            "https://www.boshamlan.com/للايجار": "عقار للايجار",
-            "https://www.boshamlan.com/للبيع": "عقار للبيع",
-            "https://www.boshamlan.com/للبدل": "عقار للبدل"
+
+class Main:
+    def __init__(self, credentials_dict):
+        """Initialize with Google Drive credentials."""
+        self.credentials_dict = credentials_dict
+        self.yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        self.drive_saver = SavingOnDrive(credentials_dict)
+
+    async def scrape_and_save(self):
+        """Scrape data for all sections, save to Excel, and upload to Google Drive."""
+        print("Starting scraping process...")
+
+        # Define URLs for each section
+        sections = {
+            'sale': 'https://www.boshamlan.com/search?c=1&t=1',
+            'rent': 'https://www.boshamlan.com/search?c=1&t=2',
+            'exchange': 'https://www.boshamlan.com/search?c=1&t=3',
+            'offices': 'https://www.boshamlan.com/المكاتب'
         }
-        self.office_url = "https://www.boshamlan.com/المكاتب"
-        self.yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        self.excel_files = []
 
-    async def run(self):
-        # Scrape property listings for each URL in the property_urls dictionary
-        for url, file_name in self.property_urls.items():
-            scraper = PropertyCardScraper(url)
-            result = await scraper.scrape_cards()
-            file_path = self.save_to_excel(result, file_name)
-            if file_path:
-                self.excel_files.append(file_path)
+        excel_files = []
 
-        # Scrape office listings
-        scraper = OfficeCardScraper(self.office_url)
-        result = await scraper.scrape_cards()
-        file_path = self.save_to_excel(result, "المكاتب")
+        # Scrape property sections (sale, rent, exchange)
+        for section, url in sections.items():
+            if section != 'offices':
+                print(f"\nScraping {section} properties...")
+                scraper = PropertyCardScraper(url)
+                data = await scraper.scrape_cards()
+                file_path = self.save_to_excel(data, section)
+                if file_path:
+                    excel_files.append(file_path)
+
+        # Scrape offices
+        print(f"\nScraping offices...")
+        scraper = OfficeCardScraper(sections['offices'])
+        data = await scraper.scrape_cards()
+        file_path = self.save_to_excel(data, 'offices')
         if file_path:
-            self.excel_files.append(file_path)
+            excel_files.append(file_path)
 
-        # Upload to Google Drive
-        self.upload_to_drive()
+        # Upload files to Google Drive
+        if excel_files:
+            print("\nAuthenticating with Google Drive...")
+            self.drive_saver.authenticate()
+            print("Uploading files to Google Drive...")
+            self.drive_saver.save_files(excel_files)
+        else:
+            print("No Excel files generated to upload.")
+
+        print("Scraping and upload process completed.")
 
     def save_to_excel(self, data, file_name):
         """
@@ -61,38 +82,16 @@ class MainScraper:
             print(f"Error while saving data to Excel for {file_name}: {e}")
             return None
 
-    def upload_to_drive(self):
-        """
-        Upload saved Excel files to Google Drive in a folder named with yesterday's date in two parent folders.
-        """
-        if not self.excel_files:
-            print("No Excel files to upload.")
-            return
-    
-        # Initialize SavingOnDrive
-        if 'BOSHAMLAN_GCLOUD_KEY_JSON' not in os.environ:
-            raise EnvironmentError("BOSHAMLAN_GCLOUD_KEY_JSON not found.")
-    
-        credentials_json = os.environ['BOSHAMLAN_GCLOUD_KEY_JSON']
-        credentials_dict = json.loads(credentials_json)
-    
-        drive_saver = SavingOnDrive(credentials_dict)
-        drive_saver.authenticate()
-    
-        parent_folder_ids = [
-            "11sji-ooCJdIx3t10rtr6mB0O9BntAJoF",  # Existing parent folder
-            "1FkFWACOrKJRzPl2v6OST_I8XDIzbwZ1x"   # New parent folder
-        ]
-    
-        for parent_folder_id in parent_folder_ids:
-            folder_id = drive_saver.create_folder(self.yesterday, parent_folder_id)
-            print(f"Created folder '{self.yesterday}' with ID: {folder_id} in parent folder ID: {parent_folder_id}")
-            
-            for file in self.excel_files:
-                drive_saver.upload_file(file, folder_id)
-                print(f"Uploaded {file} to Google Drive in folder ID: {folder_id}.")
 
-  
+# Usage
 if __name__ == "__main__":
-    main_scraper = MainScraper()
-    asyncio.run(main_scraper.run())
+    # Load Google Drive credentials from a JSON file
+    try:
+        with open('path_to_service_account.json', 'r') as f:
+            credentials_dict = json.load(f)
+    except Exception as e:
+        print(f"Error loading credentials: {e}")
+        exit(1)
+
+    main = Main(credentials_dict)
+    asyncio.run(main.scrape_and_save())
