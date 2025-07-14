@@ -185,7 +185,7 @@ class OfficeCardScraper:
 
 
 # Usage
-if __name__ == "__main__":
-    scraper = OfficeCardScraper("https://www.boshamlan.com/المكاتب")
-    result = asyncio.run(scraper.scrape_cards())
-    print(result)
+# if __name__ == "__main__":
+#     scraper = OfficeCardScraper("https://www.boshamlan.com/المكاتب")
+#     result = asyncio.run(scraper.scrape_cards())
+#     print(result)
