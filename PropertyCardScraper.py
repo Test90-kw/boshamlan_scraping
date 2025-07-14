@@ -2,246 +2,330 @@ import asyncio
 from playwright.async_api import async_playwright
 import json
 from datetime import datetime, timedelta
+import nest_asyncio
 
+nest_asyncio.apply()
 
 class PropertyCardScraper:
     def __init__(self, url):
+        print("Initializing PropertyCardScraper...")
         self.url = url
         self.browser = None
         self.context = None
 
     async def scrape_cards(self):
+        print("Starting scrape_cards...")
         async with async_playwright() as p:
+            print("Launching browser...")
             self.browser = await p.chromium.launch(headless=True)
             self.context = await self.browser.new_context()
             main_page = await self.context.new_page()
-
             try:
+                print(f"Navigating to {self.url} ...")
                 await main_page.goto(self.url)
                 await main_page.wait_for_selector('.relative.min-h-48', timeout=60000)
+                print("Main page loaded.")
 
-                # Scroll to load all posts
+                print("Scrolling to bottom to load all cards...")
                 await self.scroll_to_bottom(main_page)
 
-                # Wait again to ensure all posts are loaded
-                await main_page.wait_for_selector('.relative.min-h-48')
-
-                # Get all card containers dynamically
+                print("Querying all card containers...")
                 posts = await main_page.query_selector_all('.relative.w-full.rounded-lg.card-shadow')
-
                 if not posts:
+                    print("No cards found on this page.")
                     return "No cards found on this page."
 
                 result = []
+                print("Processing all cards for logic...")
+                pinned_done = False
+                not_pinned_done = False
+                consecutive_pinned_old = 0
+                consecutive_not_pinned_old = 0
+
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
                 for index, post in enumerate(posts):
-                    print(f"\nProcessing card {index + 1}...")
+                    pin_tag = await post.query_selector('div.bg-stickyTag')
+                    is_pinned = False
+                    if pin_tag:
+                        text = await pin_tag.text_content()
+                        if text and "مميز" in text:
+                            is_pinned = True
 
-                    # First get the title to use as identifier
-                    title = await self.scrape_text(post, '.font-bold.text-lg.text-dark.line-clamp-2.break-words')
-                    price = await self.scrape_text(post, '.rounded.font-bold.text-primary-dark')
+                    date_elem = await post.query_selector('.rounded.text-xs.flex.items-center.gap-1')
+                    date_text = (await date_elem.text_content()).strip() if date_elem else ""
 
-                    card_data = {
-                        'title': title,
-                        'price': price,
-                        'relative_date': await self.scrape_text(post, '.rounded.text-xs.flex.items-center.gap-1'),
-                        'description': await self.scrape_description(post),
-                        'image_url': await self.scrape_image(post),
-                        'link': await self.scrape_link(title, price)  # Pass identifying info
-                    }
+                    is_old = False
+                    try:
+                        card_date = datetime.strptime(date_text, "%Y-%m-%d")
+                        if card_date < datetime.strptime(yesterday, "%Y-%m-%d"):
+                            is_old = True
+                    except ValueError:
+                        if not any(word in date_text for word in ['ساعة', 'دقيقة', 'ثانية']):
+                            is_old = True
 
-                    # Extract the mobile number and views number from the link page
-                    link = card_data['link']
-                    if link:
-                        card_data['mobile_number'] = await self.scrape_mobile_number(link)
-                        card_data['views_number'] = await self.scrape_views_number(link)
+                    print(f"Card {index+1}: pinned={is_pinned}, date_text='{date_text}', is_old={is_old}, pinned_done={pinned_done}, not_pinned_done={not_pinned_done}")
 
-                    result.append(card_data)
+                    if is_pinned and not pinned_done:
+                        if is_old:
+                            consecutive_pinned_old += 1
+                            print(f"Card {index+1}: consecutive_pinned_old = {consecutive_pinned_old}")
+                        else:
+                            consecutive_pinned_old = 0
+                        if consecutive_pinned_old >= 3:
+                            pinned_done = True
+                            print("3 consecutive old pinned cards found. Stopping collecting pinned cards.")
+                            continue
+                        if is_old:
+                            continue  # skip old cards
+                        card_data = await self.scrape_card_data(post, index, main_page)
+                        result.append(card_data)
 
-                # Filter cards based on relative_date format "any number ساعة"
-                result = self.filter_by_relative_date(result)
+                    elif not is_pinned and pinned_done and not not_pinned_done:
+                        if is_old:
+                            consecutive_not_pinned_old += 1
+                            print(f"Card {index+1}: consecutive_not_pinned_old = {consecutive_not_pinned_old}")
+                        else:
+                            consecutive_not_pinned_old = 0
+                        if consecutive_not_pinned_old >= 3:
+                            not_pinned_done = True
+                            print("3 consecutive old not-pinned cards found. Stopping collecting not-pinned cards.")
+                            continue
+                        if is_old:
+                            continue  # skip old cards
+                        card_data = await self.scrape_card_data(post, index, main_page)
+                        result.append(card_data)
+                    else:
+                        continue
 
+                print(f"Total cards collected: {len(result)}")
                 return json.dumps(result, ensure_ascii=False, indent=2)
 
             finally:
+                print("Closing browser...")
                 await self.browser.close()
 
-    def filter_by_relative_date(self, cards):
+    async def scrape_card_data(self, post, index, main_page):
+        print(f"Scraping data for card {index+1}...")
+        title = await self.scrape_text(post, '.font-bold.text-lg.text-dark.line-clamp-2.break-words')
+        price = await self.scrape_text(post, '.rounded.font-bold.text-primary-dark')
+        relative_date = await self.scrape_text(post, '.rounded.text-xs.flex.items-center.gap-1')
+        description = await self.scrape_description(post)
+        image_url = await self.scrape_image(post)
+        pin_status = await self.scrape_pin_status(post)
+
+        link, mobile_number, views_number = await self.scrape_link_and_details(post, index, main_page)
+
+        card_data = {
+            'title': title,
+            'price': price,
+            'relative_date': relative_date,
+            'description': description,
+            'image_url': image_url,
+            'link': link,
+            'mobile_number': mobile_number,
+            'views_number': views_number,
+            'pin_status': pin_status
+        }
+        print(f"Card {index+1} Data: {card_data}")
+        return card_data
+
+    async def scrape_link_and_details(self, post, index, main_page):
         """
-        Filters the cards where the relative date is in the format 'any number ساعة'.
+        Clicks the card to open its details page in the same tab, extracts the URL and other details, then navigates back.
         """
-        filtered_cards = []
-        for card in cards:
-            relative_date = card.get('relative_date', '')
-            # Check if the relative date contains any number followed by 'ساعة'
-            if ('ساعة' in relative_date or 'دقيقة' in relative_date) and relative_date.split()[0].isdigit():
-                filtered_cards.append(card)
-        return filtered_cards
+        print(f"Clicking card {index+1} to get link and details (in-place navigation)...")
+        try:
+            # Get the old url before clicking (so we can detect change and come back)
+            old_url = main_page.url
+            print(f"Old main page URL: {old_url}")
+
+            # Scroll card into view and click
+            await post.scroll_into_view_if_needed()
+            # Click and wait for navigation or content change
+            try:
+                # Try waiting for navigation (it may not be a full page load, so timeout quickly and fall back)
+                await asyncio.wait_for(main_page.wait_for_navigation(), timeout=5)
+            except Exception:
+                pass
+            await post.click(force=True)
+
+            # Wait for URL to change or a unique detail page element to appear
+            for _ in range(30):
+                if main_page.url != old_url:
+                    break
+                await asyncio.sleep(0.2)
+            detail_url = main_page.url
+            print(f"Detail page URL: {detail_url}")
+
+            # Extract mobile number
+            mobile_number = None
+            try:
+                await main_page.wait_for_selector('.flex.gap-3.justify-center a', timeout=5000)
+                mobile_element = await main_page.query_selector('.flex.gap-3.justify-center a')
+                if mobile_element:
+                    mobile_href = await mobile_element.get_attribute('href')
+                    print(f"Mobile href: {mobile_href}")
+                    if mobile_href and mobile_href.startswith('tel:'):
+                        mobile_number = mobile_href[4:]
+            except Exception as e:
+                print(f"Failed to get mobile: {e}")
+
+            # Extract views number
+            views_number = None
+            try:
+                await main_page.wait_for_selector(
+                    '.flex.items-center.justify-center.gap-1.rounded.bg-whitish-transparent.py-1.px-1\\.5.text-xs.min-w-\\[62px\\] div', timeout=5000)
+                views_element = await main_page.query_selector(
+                    '.flex.items-center.justify-center.gap-1.rounded.bg-whitish-transparent.py-1.px-1\\.5.text-xs.min-w-\\[62px\\] div')
+                if views_element:
+                    views_number = await views_element.text_content()
+                    print(f"Views number: {views_number}")
+            except Exception as e:
+                print(f"Failed to get views: {e}")
+
+            # Go back to the main listing page
+            print("Navigating back to main page...")
+            await main_page.go_back()
+            await main_page.wait_for_selector('.relative.min-h-48', timeout=10000)
+            print("Back to main page.")
+
+            return detail_url, mobile_number, views_number
+
+        except Exception as e:
+            print(f"Failed to click/get details for card {index+1}: {e}")
+            # Try to get back to main page if stuck
+            try:
+                await main_page.goto(self.url)
+                await main_page.wait_for_selector('.relative.min-h-48', timeout=15000)
+            except Exception as ee:
+                print(f"Failed to recover main page: {ee}")
+            return None, None, None
 
     async def scrape_text(self, post, selector):
+        print(f"Scraping text with selector: {selector}")
         try:
             element = await post.query_selector(selector)
             if element:
-                return await element.text_content()
+                text = await element.text_content()
+                print(f"Found text: {text}")
+                return text
         except Exception as e:
             print(f"Failed to scrape {selector}: {e}")
         return None
 
     async def scrape_description(self, post):
+        print("Scraping description...")
         try:
             description_element = await post.query_selector('.line-clamp-2:nth-of-type(2)')
             if description_element:
-                return await description_element.text_content()
+                desc = await description_element.text_content()
+                print(f"Description found: {desc}")
+                return desc
         except Exception as e:
             print(f"Failed to scrape description: {e}")
         return None
 
     async def scrape_image(self, post):
+        print("Scraping image...")
         try:
             img_element = await post.query_selector('img[alt="Post"]')
             if img_element:
-                return await img_element.get_attribute('src')
+                src = await img_element.get_attribute('src')
+                print(f"Image src: {src}")
+                return src
         except Exception as e:
             print(f"Failed to scrape image: {e}")
         return None
 
-    async def scrape_link(self, title, price):
-        new_page = None
+    async def scrape_pin_status(self, post):
+        print("Scraping pin status...")
         try:
-            # Create a new page and navigate to the main URL
-            new_page = await self.context.new_page()
-            await new_page.goto(self.url)
-
-            # Wait for cards to load
-            await new_page.wait_for_selector('.relative.min-h-48')
-
-            # Find the card with matching title and price
-            card_selector = f"div.relative.w-full.rounded-lg.card-shadow:has(.font-bold.text-lg.text-dark.line-clamp-2.break-words:text-is(\"{title}\"))"
-            matching_card = await new_page.wait_for_selector(card_selector)
-
-            if matching_card:
-                # Set up navigation listener
-                async with new_page.expect_navigation(timeout=5000, wait_until='networkidle') as navigation_info:
-                    await matching_card.click()
-                    try:
-                        await navigation_info.value
-                        final_url = new_page.url
-                        await new_page.close()
-                        return final_url
-                    except Exception as e:
-                        print(f"Navigation failed: {e}")
-
-            await new_page.close()
-            return None
-
+            pin_tag = await post.query_selector('div.bg-stickyTag')
+            if pin_tag:
+                text = await pin_tag.text_content()
+                if text and "مميز" in text:
+                    print("Pin status: Pinned")
+                    return "Pinned"
         except Exception as e:
-            print(f"Failed to scrape link: {e}")
-            if new_page:
-                try:
-                    await new_page.close()
-                except:
-                    pass
-            return None
-
-    async def scrape_mobile_number(self, link):
-        new_page = None
-        try:
-            # Create a new page and navigate to the link
-            new_page = await self.context.new_page()
-            await new_page.goto(link)
-
-            # Find the mobile number anchor inside the specific div
-            mobile_element = await new_page.query_selector('.flex.gap-3.justify-center a')
-            if mobile_element:
-                mobile_number = await mobile_element.get_attribute('href')
-                # Extract the number from the href (assuming it starts with tel:)
-                if mobile_number and mobile_number.startswith('tel:'):
-                    return mobile_number[4:]
-        except Exception as e:
-            print(f"Failed to scrape mobile number: {e}")
-
-        return None
-
-    async def scrape_views_number(self, link):
-        new_page = None
-        try:
-            # Create a new page and navigate to the link
-            new_page = await self.context.new_page()
-            await new_page.goto(link)
-            await new_page.wait_for_selector(
-                '.flex.items-center.justify-center.gap-1.rounded.bg-whitish-transparent.py-1.px-1\\.5.text-xs.min-w-\\[62px\\] div',
-                timeout=10000)
-
-            # Find the views number
-            views_element = await new_page.query_selector(
-                '.flex.items-center.justify-center.gap-1.rounded.bg-whitish-transparent.py-1.px-1\\.5.text-xs.min-w-\\[62px\\] div')
-            if views_element:
-                views_number = await views_element.text_content()
-                return views_number.strip() if views_number else None
-            else:
-                print("Views element not found!")
-                return None
-        except Exception as e:
-            print(f"Failed to scrape views number: {e}")
-
-        return None
+            print(f"Failed to check pin status: {e}")
+        print("Pin status: Not pinned")
+        return "Not pinned"
 
     async def scroll_to_bottom(self, page):
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        print("Starting scroll_to_bottom...")
         button_selector = (
             'button.text-base.shrink-0.select-none.whitespace-nowrap.transition-colors.'
             'disabled\\:opacity-50.h-12.font-bold.bg-primary.text-on-primary.active\\:bg-active-primary.'
             'w-full.cursor-pointer.z-20.max-w-2xl.py-3.md\\:py-4.px-8.rounded-full.flex.items-center.justify-center.gap-2\\.5'
         )
-
-        # 1. Press the button ONCE if found
         try:
+            print("Looking for 'Show More' button...")
             button = await page.query_selector(button_selector)
             if button:
                 is_disabled = await button.get_property('disabled')
                 if not is_disabled:
+                    print("Clicking 'Show More' button...")
                     await button.click()
-                    await asyncio.sleep(10)  # Wait for items to load after clicking
+                    await asyncio.sleep(10)
         except Exception as e:
             print(f"Could not click 'Show More' button: {e}")
 
-        # 2. Begin scrolling and checking card dates
-        consecutive_old = 0
-        while True:
+        max_scrolls = 30
+        for scroll_count in range(max_scrolls):
+            print(f"Scrolling down... (iteration {scroll_count+1})")
             await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            await asyncio.sleep(2)  # Allow cards to load
-
-            # 3. Get all relative date elements
-            date_elements = await page.query_selector_all('.rounded.text-xs.flex.items-center.gap-1')
-            date_texts = []
-            for elem in date_elements:
-                txt = await elem.text_content()
-                if txt:
-                    date_texts.append(txt.strip())
-
-            # 4. Check for 3 consecutive cards with date older than yesterday
-            consecutive_old = 0
-            for date_str in date_texts:
-                # If your cards have actual date format, use this:
-                try:
-                    card_date = datetime.strptime(date_str, "%Y-%m-%d")
-                    if card_date < datetime.strptime(yesterday, "%Y-%m-%d"):
-                        consecutive_old += 1
-                        if consecutive_old >= 3:
-                            print("3 consecutive old cards found. Stopping scroll.")
-                            return
+            await asyncio.sleep(2)
+            posts = await page.query_selector_all('.relative.w-full.rounded-lg.card-shadow')
+            if posts and len(posts) >= 10:
+                print(f"Cards loaded: {len(posts)}")
+                pinned_streak = 0
+                not_pinned_streak = 0
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                in_pinned = True
+                for i, post in enumerate(posts):
+                    pin_tag = await post.query_selector('div.bg-stickyTag')
+                    is_pinned = False
+                    if pin_tag:
+                        text = await pin_tag.text_content()
+                        if text and "مميز" in text:
+                            is_pinned = True
                     else:
-                        consecutive_old = 0
-                except ValueError:
-                    # If not a date string, fallback to your previous logic (e.g. "ساعة" or "دقيقة")
-                    if any(word in date_str for word in ['ساعة', 'دقيقة']):
-                        consecutive_old = 0  # Reset, it's a fresh card
-                    else:
-                        consecutive_old += 1
-                        if consecutive_old >= 3:
-                            print("3 consecutive old cards found. Stopping scroll.")
-                            return
+                        is_pinned = False
+                        in_pinned = False
+                    date_elem = await post.query_selector('.rounded.text-xs.flex.items-center.gap-1')
+                    date_text = (await date_elem.text_content()).strip() if date_elem else ""
+                    is_old = False
+                    try:
+                        card_date = datetime.strptime(date_text, "%Y-%m-%d")
+                        if card_date < datetime.strptime(yesterday, "%Y-%m-%d"):
+                            is_old = True
+                    except ValueError:
+                        if not any(word in date_text for word in ['ساعة', 'دقيقة', 'ثانية']):
+                            is_old = True
+                    if is_pinned and is_old and in_pinned:
+                        pinned_streak += 1
+                    elif not is_pinned and is_old and not in_pinned:
+                        not_pinned_streak += 1
+                    if pinned_streak >= 3 and not_pinned_streak >= 3:
+                        print("Sufficient cards for processing (3 consecutive old pinned and 3 consecutive old not pinned found).")
+                        return
+            else:
+                print(f"Not enough cards loaded yet ({len(posts) if posts else 0}). Continuing scroll...")
+        print("Reached max scrolls or detected enough cards.")
 
-            # If not enough cards found to check, break to avoid infinite loop
-            if len(date_texts) < 3:
-                print("Not enough cards to check for consecutive old dates.")
-                break
+# async def main():
+#     url = "https://www.boshamlan.com/search?c=1"
+#     print("Creating scraper...")
+#     scraper = PropertyCardScraper(url)
+#     print("Begin scraping...")
+#     result = await scraper.scrape_cards()
+#     print("Final result:")
+#     print(result)
+
+# if __name__ == "__main__":
+#     try:
+#         loop = asyncio.get_event_loop()
+#         loop.run_until_complete(main())
+#     except RuntimeError:
+#         asyncio.run(main())
