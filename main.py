@@ -117,8 +117,8 @@ class Main:
 if __name__ == "__main__":
     # Load Google Drive credentials from a JSON file
     try:
-        with open('path_to_service_account.json', 'r') as f:
-            credentials_dict = json.load(f)
+        # with open('path_to_service_account.json', 'r') as f:
+        #     credentials_dict = json.load(f)
         # Set environment variable for BOSHAMLAN_GCLOUD_KEY_JSON
         os.environ['BOSHAMLAN_GCLOUD_KEY_JSON'] = json.dumps(credentials_dict)
     except Exception as e:
