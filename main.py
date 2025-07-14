@@ -115,14 +115,14 @@ class Main:
 
 # Usage
 if __name__ == "__main__":
-    # Load Google Drive credentials from a JSON file
+    # Load Google Drive credentials from environment variable
     try:
-        # with open('path_to_service_account.json', 'r') as f:
-        #     credentials_dict = json.load(f)
-        # Set environment variable for BOSHAMLAN_GCLOUD_KEY_JSON
-        os.environ['BOSHAMLAN_GCLOUD_KEY_JSON'] = json.dumps(credentials_dict)
+        if 'BOSHAMLAN_GCLOUD_KEY_JSON' not in os.environ:
+            raise EnvironmentError("BOSHAMLAN_GCLOUD_KEY_JSON environment variable not set.")
+        credentials_json = os.environ['BOSHAMLAN_GCLOUD_KEY_JSON']
+        credentials_dict = json.loads(credentials_json)
     except Exception as e:
-        print(f"Error loading credentials: {e}")
+        print(f"Error loading credentials from environment variable: {e}")
         exit(1)
 
     main = Main(credentials_dict)
