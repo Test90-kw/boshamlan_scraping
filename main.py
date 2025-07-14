@@ -86,12 +86,12 @@ class Main:
 # Usage
 if __name__ == "__main__":
     # Load Google Drive credentials from a JSON file
-    try:
-        with open('path_to_service_account.json', 'r') as f:
-            credentials_dict = json.load(f)
-    except Exception as e:
-        print(f"Error loading credentials: {e}")
-        exit(1)
+    # try:
+    #     with open('path_to_service_account.json', 'r') as f:
+    #         credentials_dict = json.load(f)
+    # except Exception as e:
+    #     print(f"Error loading credentials: {e}")
+    #     exit(1)
 
     main = Main(credentials_dict)
     asyncio.run(main.scrape_and_save())
