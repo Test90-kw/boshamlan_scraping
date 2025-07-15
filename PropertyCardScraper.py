@@ -314,18 +314,3 @@ class PropertyCardScraper:
                 print(f"Not enough cards loaded yet ({len(posts) if posts else 0}). Continuing scroll...")
         print("Reached max scrolls or detected enough cards.")
 
-# async def main():
-#     url = "https://www.boshamlan.com/search?c=1"
-#     print("Creating scraper...")
-#     scraper = PropertyCardScraper(url)
-#     print("Begin scraping...")
-#     result = await scraper.scrape_cards()
-#     print("Final result:")
-#     print(result)
-
-# if __name__ == "__main__":
-#     try:
-#         loop = asyncio.get_event_loop()
-#         loop.run_until_complete(main())
-#     except RuntimeError:
-#         asyncio.run(main())
