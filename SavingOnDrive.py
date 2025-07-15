@@ -36,8 +36,8 @@ class SavingOnDrive:
 
     def save_files(self, files):
         parent_folder_ids = [
-            '1ayaYWPFnswsOP2nRiDtiwGuy_r43Dr3F',  # Existing "Property Scraper Uploads"
-            '1FkFWACOrKJRzPl2v6OST_I8XDIzbwZ1x'   # New parent folder
+            '17WpAimIo-q6xMhlnUfQ_t6NMnAICQrVw',
+            '1lL8iWCaCSFqHtsPdm35H8MC1WqQMjaPc' 
         ]
     
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
