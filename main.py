@@ -96,8 +96,8 @@ class Main:
         drive_saver.authenticate()
     
         parent_folder_ids = [
-            "11sji-ooCJdIx3t10rtr6mB0O9BntAJoF",  # Existing parent folder
-            "1FkFWACOrKJRzPl2v6OST_I8XDIzbwZ1x"   # New parent folder
+            '17WpAimIo-q6xMhlnUfQ_t6NMnAICQrVw',
+            '1lL8iWCaCSFqHtsPdm35H8MC1WqQMjaPc' 
         ]
     
         for parent_folder_id in parent_folder_ids:
