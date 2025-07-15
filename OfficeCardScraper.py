@@ -182,10 +182,3 @@ class OfficeCardScraper:
             mobile_number = match.group(1)
             return f"+965{mobile_number}"
         return None
-
-
-# Usage
-# if __name__ == "__main__":
-#     scraper = OfficeCardScraper("https://www.boshamlan.com/المكاتب")
-#     result = asyncio.run(scraper.scrape_cards())
-#     print(result)
